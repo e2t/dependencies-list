@@ -1,13 +1,17 @@
 Attribute VB_Name = "Main"
 Option Explicit
 
-Public Declare PtrSafe Function GetSystemMetrics Lib "user32.dll" (ByVal index As Long) As Long
-Public Const SM_CXSCREEN = 0
-Public Const SM_CYSCREEN = 1
+Public Const MacroName = "DependenciesList"
+Public Const MacroSection = "Main"
+Public Const WidthSetting = "WidthScreen"
+Public Const HeightSetting = "HeightScreen"
 
 Const BASE_INDENT As String = "|    "
-Const LABEL_NOT_LOADED As String = "НЕ ОТКРЫТ"
-Const LABEL_NOT_FOUND As String = "НЕ НАЙДЕН"
+Const LABEL_NOT_LOADED As String = "not open"
+Const LABEL_NOT_FOUND As String = "NOT FOUND"
+Public Const kEverything = "Everything"
+Public Const kTopOnly = "Top level only"
+Public Const kStruct = "Structure"
 
 Const COL_IS_LOADED As Integer = 0
 Const COL_FULL_NAME As Integer = 1
@@ -27,7 +31,7 @@ Dim isHieDepsCountShowed As Boolean
 Dim depModels As Dictionary  'key: fullName, value: ModelDoc2
 Dim scriptFSO As FileSystemObject
 
-Dim currentDocName As String
+Public currentDocName As String
 Dim currentDirName As String
 
 Sub Main()
@@ -49,7 +53,7 @@ Sub Main()
     
     Set depModels = New Dictionary
     Set scriptFSO = New FileSystemObject
-
+    
     currentDocName = doc.GetPathName
     currentDirName = Left(currentDocName, InStrRev(currentDocName, "\"))
     
@@ -82,10 +86,10 @@ Function GetHieDeps() As Collection
     Set GetHieDeps = hieDeps
 End Function
 
-Function CheckStatusModel(doc As ModelDoc2, filename As String) As FileStatus_t
+Function CheckStatusModel(doc As ModelDoc2, fileName As String) As FileStatus_t
     If Not doc Is Nothing Then
         CheckStatusModel = IS_LOADED
-    ElseIf scriptFSO.FileExists(filename) Then
+    ElseIf scriptFSO.FileExists(fileName) Then
         CheckStatusModel = IS_NOT_LOADED
     Else
         CheckStatusModel = IS_NOT_FOUND
@@ -93,7 +97,7 @@ Function CheckStatusModel(doc As ModelDoc2, filename As String) As FileStatus_t
 End Function
 
 Sub GetRecursiveDeps(docname As String, level As Integer, ByRef deps As Collection)
-    Dim i As Variant
+    Dim I As Variant
     Dim depname As String
     Dim doc As ModelDoc2
     Dim indent As String
@@ -105,8 +109,8 @@ Sub GetRecursiveDeps(docname As String, level As Integer, ByRef deps As Collecti
     If IsArrayEmpty(get_deps) Then
         Exit Sub
     End If
-    For Each i In get_deps
-        depname = i.fullName
+    For Each I In get_deps
+        depname = I.fullName
         Set doc = depModels(depname)
         Set depend = New Depend_t
         depend.fullName = indent & depname
@@ -121,22 +125,22 @@ Sub GetRecursiveDeps(docname As String, level As Integer, ByRef deps As Collecti
 End Sub
 
 Function GetIndent(level As Integer) As String
-    Dim i As Integer
+    Dim I As Integer
     
     GetIndent = ""
-    For i = 1 To level
+    For I = 1 To level
         GetIndent = GetIndent & BASE_INDENT
     Next
 End Function
 
 Sub FillThisDeps(deps As Variant)
-    Dim i As Variant
+    Dim I As Variant
     Dim depend As Depend_t
     
     With MainForm.lstDeps
         .Clear
-        For Each i In deps
-            Set depend = i
+        For Each I In deps
+            Set depend = I
             .AddItem
             Select Case depend.status
                 Case IS_NOT_LOADED
@@ -163,41 +167,41 @@ Function FillDeps()  'mask for button
     Dim inTitle As String
     
     With MainForm
-        If .allRad.Value Then
+        If .allRad.value Then
             FillThisDeps GetAllDeps
-            inTitle = "все"
+            inTitle = LCase(kEverything)
             If Not isAllDepsCountShowed Then
-                .allRad.Caption = "Показать все (" & ArraySize(allDeps) & ")"
+                .allRad.Caption = kEverything & " (" & ArraySize(allDeps) & ")"
                 isAllDepsCountShowed = True
             End If
-        ElseIf .topRad.Value Then
+        ElseIf .topRad.value Then
             FillThisDeps GetTopDeps
-            inTitle = "только верхнего уровня"
+            inTitle = LCase(kTopOnly)
             If Not isTopDepsCountShowed Then
-                .topRad.Caption = "Только верхнего уровня (" & ArraySize(topDeps) & ")"
+                .topRad.Caption = kTopOnly & " (" & ArraySize(topDeps) & ")"
                 isTopDepsCountShowed = True
             End If
         Else
             FillThisDeps GetHieDeps
-            inTitle = "иерархично"
+            inTitle = LCase(kStruct)
         End If
-        .Caption = "Список зависимостей модели (" & inTitle & ")"
+        SelectFilterListbox .lstDeps, .TextBoxFilter.text
     End With
 End Function
 
 ' TODO: use it
-Function RelativePath(filename As String) As String
-    If filename Like currentDirName & "*" Then
-        RelativePath = Right(filename, Len(filename) - Len(currentDirName))
+Function RelativePath(fileName As String) As String
+    If fileName Like currentDirName & "*" Then
+        RelativePath = Right(fileName, Len(fileName) - Len(currentDirName))
     Else
-        RelativePath = filename
+        RelativePath = fileName
     End If
 End Function
 
 Function GetDeps(docname As String, resursive As Boolean) As Depend_t()
     Dim result() As Depend_t
     Dim deps As Variant  'String() or empty
-    Dim i As Integer
+    Dim I As Integer
     Dim doc As ModelDoc2
     
     deps = swApp.GetDocumentDependencies2(docname, resursive, False, False)
@@ -205,36 +209,36 @@ Function GetDeps(docname As String, resursive As Boolean) As Depend_t()
         Exit Function
     End If
     ReDim result((UBound(deps) - LBound(deps) + 1) / 2 - 1)
-    For i = LBound(deps) To UBound(deps) - 1 Step 2
-        Set result(i / 2) = New Depend_t
-        result(i / 2).fullName = deps(i + 1)
+    For I = LBound(deps) To UBound(deps) - 1 Step 2
+        Set result(I / 2) = New Depend_t
+        result(I / 2).fullName = deps(I + 1)
     Next
     BubbleSortDepends result
-    For i = LBound(result) To UBound(result)
-        Set doc = swApp.GetOpenDocumentByName(result(i).fullName)
-        result(i).status = CheckStatusModel(doc, result(i).fullName)
-        If Not depModels.Exists(result(i).fullName) Then
-            depModels.Add result(i).fullName, doc
+    For I = LBound(result) To UBound(result)
+        Set doc = swApp.GetOpenDocumentByName(result(I).fullName)
+        result(I).status = CheckStatusModel(doc, result(I).fullName)
+        If Not depModels.Exists(result(I).fullName) Then
+            depModels.Add result(I).fullName, doc
         End If
     Next
     GetDeps = result
 End Function
 
 Function GetSelected() As String()
-    Dim i As Integer, j As Integer
-    Dim selected() As String
+    Dim I As Integer, j As Integer
+    Dim Selected() As String
     
-    ReDim selected(MainForm.lstDeps.ListCount)
+    ReDim Selected(MainForm.lstDeps.ListCount)
     j = -1
-    For i = 0 To MainForm.lstDeps.ListCount - 1
-        If MainForm.lstDeps.selected(i) Then
+    For I = 0 To MainForm.lstDeps.ListCount - 1
+        If MainForm.lstDeps.Selected(I) Then
             j = j + 1
-            selected(j) = GetCleanName(MainForm.lstDeps.List(i, COL_FULL_NAME)) 'it need only for hierarchy
+            Selected(j) = GetCleanName(MainForm.lstDeps.List(I, COL_FULL_NAME)) 'it need only for hierarchy
         End If
     Next
     If j >= 0 Then
-        ReDim Preserve selected(j)
-        GetSelected = selected
+        ReDim Preserve Selected(j)
+        GetSelected = Selected
     End If
 End Function
 
@@ -245,17 +249,17 @@ Function GetCleanName(line As String) As String
     GetCleanName = ary(UBound(ary))
 End Function
 
-Sub OpenDocs(selected() As String)
-    Dim i As Variant
+Sub OpenDocs(Selected() As String)
+    Dim I As Variant
     Dim key As String
     Dim doc As ModelDoc2
     
-    If IsArrayEmpty(selected) Then
+    If IsArrayEmpty(Selected) Then
         Exit Sub
     End If
     
-    For Each i In selected
-        key = i
+    For Each I In Selected
+        key = I
         Set doc = depModels(key)
         If Not doc Is Nothing Then
             ShowDoc doc.GetPathName
@@ -277,7 +281,7 @@ Sub SwapObj(ByRef first As Object, ByRef second As Object)
 End Sub
 
 Sub BubbleSortDepends(ByRef arr() As Depend_t)
-    Dim i As Integer
+    Dim I As Integer
     Dim j As Integer
     Dim need_sorted As Boolean
     Dim penult_index As Integer
@@ -285,21 +289,21 @@ Sub BubbleSortDepends(ByRef arr() As Depend_t)
     
     penult_index = UBound(arr) - 1
     need_sorted = True
-    i = LBound(arr)
-    While (i <= penult_index) And need_sorted
+    I = LBound(arr)
+    While (I <= penult_index) And need_sorted
         need_sorted = False
-        For j = LBound(arr) To penult_index - i
+        For j = LBound(arr) To penult_index - I
             If arr(j).fullName > arr(j + 1).fullName Then
                 SwapObj arr(j), arr(j + 1)
                 need_sorted = True
             End If
         Next
-        i = i + 1
+        I = I + 1
     Wend
 End Sub
 
 Function JoinStrings(lines() As String, sep As String) As String
-    Dim i As Integer
+    Dim I As Integer
     Dim lowIndex As Integer
     
     If IsArrayEmpty(lines) Then
@@ -307,14 +311,14 @@ Function JoinStrings(lines() As String, sep As String) As String
     Else
         lowIndex = LBound(lines)
         JoinStrings = lines(lowIndex)
-        For i = lowIndex + 1 To UBound(lines)
-            JoinStrings = JoinStrings & sep & lines(i)
+        For I = lowIndex + 1 To UBound(lines)
+            JoinStrings = JoinStrings & sep & lines(I)
         Next
     End If
 End Function
 
 Function IsArrayEmpty(ByRef anArray As Variant) As Boolean
-    Dim i As Integer
+    Dim I As Integer
   
     On Error GoTo ArrayIsEmpty
     IsArrayEmpty = LBound(anArray) > UBound(anArray)
@@ -329,6 +333,34 @@ Function ShowDoc(name As String) As ModelDoc2
     Set ShowDoc = swApp.ActivateDoc3(name, False, swDontRebuildActiveDoc, err)
 End Function
 
-Sub CopySelectedInClipboard(selected() As String)
-    CopyInClipBoard JoinStrings(selected, vbNewLine)
+Sub CopySelectedInClipboard(Selected() As String)
+    CopyInClipboard JoinStrings(Selected, vbNewLine)
+End Sub
+
+Function SelectAll(Optional IsSelected As Boolean = True) 'hide
+    Dim I As Variant
+    
+    With MainForm.lstDeps
+        For I = 0 To .ListCount - 1
+            .Selected(I) = IsSelected
+        Next
+    End With
+End Function
+
+Function DeselectAll() 'hide
+    SelectAll False
+End Function
+
+Sub SelectFilterListbox(Lst As ListBox, text As String)
+    Dim I As Integer
+    
+    If text = "" Then
+        DeselectAll
+    Else
+        With MainForm.lstDeps
+            For I = 0 To Lst.ListCount - 1
+                .Selected(I) = InStr(1, .List(I, 1), text, vbTextCompare)
+            Next
+        End With
+    End If
 End Sub
