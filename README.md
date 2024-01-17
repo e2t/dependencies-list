@@ -1,4 +1,6 @@
-﻿# DependenciesList
+This project has been moved to https://codeberg.org/e2t/dependencies-list
+ 
+ # DependenciesList
 Макрос для просмотра зависимостей активной модели SolidWorks.
 
 ### Зависимости
